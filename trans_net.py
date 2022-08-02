@@ -12,10 +12,10 @@ def classifier_model():
     x = layers.Conv2D(filters=128, kernel_size=(7,7), padding='same', activation='relu')(Input_words)
     x = layers.MaxPooling2D(pool_size=(3,3))(x)
     x = layers.BatchNormalization()(x)
-    x = layers.Conv2D(filters=64, kernel_size=(5,5), padding='same', activation='relu')(Input_words)
+    x = layers.Conv2D(filters=64, kernel_size=(5,5), padding='same', activation='relu')(x)
     x = layers.MaxPooling2D(pool_size=(3,3))(x)
     x = layers.BatchNormalization()(x)
-    x = layers.Conv2D(filters=32, kernel_size=(3,3), padding='same', activation='relu')(Input_words)
+    x = layers.Conv2D(filters=32, kernel_size=(3,3), padding='same', activation='relu')(x)
     x = layers.MaxPooling2D(pool_size=(3,3))(x)
     x = layers.BatchNormalization()(x)
     x = layers.SpatialDropout2D(0.2)(x)
@@ -31,6 +31,7 @@ def classifier_model():
 
     return model
 
+#The neural network for classifying the participant ids
 def adversary_model():
     dim = (32, 32, 1)
     input_shape = (dim)
