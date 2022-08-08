@@ -6,6 +6,7 @@ import matplotlib
 import math
 from math import e
 import mne
+import matplotlib.pyplot as plt
 
 # import tensorflow as tf
 # from tensorflow import keras
@@ -246,3 +247,50 @@ def read_target_list(class_list, test_number_list, file_list):
         if file_name[0:2] in test_number_list and file_name[-3:] == 'set' and file_name[:-4] + '.fdt' in file_list and file_name[-5] in class_list:
             file_read_list.append(file_name)
     return file_read_list
+
+# From https://github.com/philipph77/ACSE-Framework
+def get_confusion_matrix(y_pred_raw, y_true_raw):
+    def plot_confusion_matrix(cm):
+        """
+        Returns a matplotlib figure containing the plotted confusion matrix.
+        
+        Args:
+        cm (array, shape = [n, n]): a confusion matrix of integer classes
+        class_names (array, shape = [n]): String names of the integer classes
+        """
+        if cm.shape[0] == 1:
+            class_names= ['Dataset']
+        elif cm.shape[0] == 2:
+            class_names = ['Negative', 'Positive']
+        elif cm.shape[0] == 3:
+            class_names = ['Negative', 'Neutral', 'Positive']
+        elif cm.shape[0] == 4:
+            class_names = ['SEED', 'SEED-IV', 'DEAP', 'DREAMER']
+        else:
+            try:
+                raise NotImplementedError
+            finally:
+                print("Unknown Number of Labels used")
+
+        figure = plt.figure(figsize=(8, 8))
+        plt.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
+        plt.title("Confusion matrix")
+        plt.colorbar()
+        tick_marks = np.arange(len(class_names))
+        plt.xticks(tick_marks, class_names, rotation=45)
+        plt.yticks(tick_marks, class_names)
+        
+        # Normalize the confusion matrix.
+        cm = np.around(cm.astype('float') / cm.sum(axis=1)[:, np.newaxis], decimals=2)
+        
+        # Use white text if squares are dark; otherwise black.
+        threshold = cm.max() / 2.
+        
+        for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
+            color = "white" if cm[i, j] > threshold else "black"
+            plt.text(j, i, cm[i, j], horizontalalignment="center", color=color)
+            
+        plt.tight_layout()
+        plt.ylabel('True label')
+        plt.xlabel('Predicted label')
+        return figure

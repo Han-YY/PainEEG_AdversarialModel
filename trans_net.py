@@ -27,7 +27,7 @@ def classifier_model():
     x = layers.Activation('sigmoid')(x)
     x = layers.Dense(2)(x)
     out = layers.Softmax()(x)
-    model = keras.Model(inputs=Input_words, outputs=[out])
+    model = keras.Model(inputs=Input_words, outputs=[out], name='main_clf')
 
     return model
 
@@ -42,6 +42,6 @@ def adversary_model():
     x = layers.Flatten()(x)
     x = layers.Dense(36)(x)
     out = layers.Softmax()(x)
-    model = keras.Model(inputs=Input_words, outputs=[out])
+    model = keras.Model(inputs=Input_words, outputs=[out], name='adv_clf')
 
     return model
