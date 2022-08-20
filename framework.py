@@ -2,33 +2,26 @@
 ##### Adapted from https://github.com/philipph77/ACSE-Framework
 import numpy as np
 from tensorflow import keras
-from tensorflow.keras import Model, Training
+from tensorflow.keras import Model
 from tensorflow.keras import layers
 from tensorflow.keras.optimizers import Adam
 import tensorflow as tf
 import trans_net
 from sklearn.model_selection import train_test_split
 import tensorflow as tf
-import tensorflow
-import keras
-import keras.backend as tf
-from tensorflow.keras.layers import Input, Dense, Flatten, Dropout, BatchNormalization, Activation, MaxPooling2D
-from tensorflow.keras.layers import AveragePooling2D, Conv2D, DepthwiseConv2D, SeparableConv2D
-from tensorflow.keras.layers import GaussianNoise
-from tensorflow.keras.models import Sequential, Model
+
+from tensorflow.keras.models import  Model
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.constraints import max_norm
+
 import numpy as np
-from sklearn.naive_bayes import GaussianNB
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.neighbors import KNeighborsClassifier
+
 import pandas as pd
 import os
 from tqdm import tqdm, trange
 from data_prep_func import get_confusion_matrix
 
 class AdversarialModel:
-    def __init__(self, data_samples, class_label, subject_label, loss_func=tf.categorical_crossentropy, lam=0.01, optimizer=Adam):
+    def __init__(self, data_samples, class_label, subject_label, loss_func=tf.keras.losses.CategoricalCrossentropy, lam=0.01, optimizer=Adam):
         ### Parameters ###
         # data_samples: the feature trials
         # class_label: the labels of conditions
@@ -40,10 +33,14 @@ class AdversarialModel:
         # Assign the values to variables
         self.dataset = [data_samples, class_label, subject_label]
 
+        # Get the number of classes involved in the classeification
+        class_unique = np.unique(class_label)
+        class_count = class_unique.shape[0]
+
         # Assign the models
         self.lam = lam
         self.optimizer = optimizer
-        self.main_clf = trans_net.classifier_model()
+        self.main_clf = trans_net.classifier_model(class_count=class_count)
         self.adv_clf = trans_net.adversary_model()
 
         # Compile the model with the loss function for adapting the adversarial process

@@ -4,7 +4,8 @@ import tensorflow.keras as keras
 from tensorflow.keras import layers
 
 # The neural network for clasifying the labels with the connectivity features
-def classifier_model():
+# class_count: the number of classes in classification (for multiclassification)
+def classifier_model(class_count):
     dim = (32, 32, 1)
     input_shape = (dim)
     Input_words = layers.Input(shape=input_shape, name='inpud_vid')
@@ -25,7 +26,7 @@ def classifier_model():
     x = layers.Activation('relu')(x)
     x = layers.Flatten()(x)
     x = layers.Activation('sigmoid')(x)
-    x = layers.Dense(2)(x)
+    x = layers.Dense(class_count)(x)
     out = layers.Softmax()(x)
     model = keras.Model(inputs=Input_words, outputs=[out], name='main_clf')
 
