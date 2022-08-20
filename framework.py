@@ -33,20 +33,23 @@ class AdversarialModel:
         # Assign the values to variables
         self.dataset = [data_samples, class_label, subject_label]
 
-        # Get the number of classes involved in the classeification
+        # Get the number of classes and subjects involved in the classeification
         class_unique = np.unique(class_label)
         class_count = class_unique.shape[0]
+        subject_unique = np.unique(subject_label)
+        subject_count = subject_unique.shape[0]
 
         # Assign the models
         self.lam = lam
         self.optimizer = optimizer
         self.main_clf = trans_net.classifier_model(class_count=class_count)
-        self.adv_clf = trans_net.adversary_model()
+        self.adv_clf = trans_net.adversary_model(sub_count=subject_count)
 
         # Compile the model with the loss function for adapting the adversarial process
-        input = layers.Input(shape=(data_samples.shape))
-        output = self.main_clf(input)
-        leakage = self.adv_clf(input)
+        input_shape = layers.Input(shape=(data_samples.shape))
+        print(input_shape)
+        output = self.main_clf(input_shape)
+        leakage = self.adv_clf(input_shape)
 
         self.adv_clf.trainable = False # Freeze the adversary classifier
 

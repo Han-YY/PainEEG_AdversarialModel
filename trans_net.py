@@ -33,7 +33,8 @@ def classifier_model(class_count):
     return model
 
 #The neural network for classifying the participant ids
-def adversary_model():
+# sub_count: the amount of subjects involved in the classification
+def adversary_model(sub_count):
     dim = (32, 32, 1)
     input_shape = (dim)
     Input_words = layers.Input(shape=input_shape, name='inpud_vid')
@@ -41,7 +42,7 @@ def adversary_model():
     x = layers.Conv2D(filters=16, kernel_size=(3,3), padding='same', activation='relu')(Input_words)
     x = layers.BatchNormalization()(x)
     x = layers.Flatten()(x)
-    x = layers.Dense(36)(x)
+    x = layers.Dense(sub_count)(x)
     out = layers.Softmax()(x)
     model = keras.Model(inputs=Input_words, outputs=[out], name='adv_clf')
 
