@@ -42,18 +42,20 @@ class AdversarialModel:
         # Assign the models
         self.lam = lam
         self.optimizer = optimizer
+
         self.main_clf = trans_net.classifier_model(class_count=class_count)
         self.adv_clf = trans_net.adversary_model(sub_count=subject_count)
+        self.main_clf.summary()
 
         # Compile the model with the loss function for adapting the adversarial process
-        input_shape = layers.Input(shape=(data_samples.shape))
+        input_shape = layers.Input(shape=(32, 32, 1))
         print(input_shape)
         output = self.main_clf(input_shape)
         leakage = self.adv_clf(input_shape)
 
         self.adv_clf.trainable = False # Freeze the adversary classifier
 
-        self.frame = Model(input, [output, leakage])
+        self.frame = Model(input_shape, [output, leakage])
         self.frame.compile(loss=[lambda x, y: loss_func(x, y), lambda x, y: loss_func(x, y)], 
         loss_weights = [1., -1. * lam], optimizer=self.optimizer, metrics=['accuracy'])
 
