@@ -294,3 +294,14 @@ def get_confusion_matrix(y_pred_raw, y_true_raw):
         plt.ylabel('True label')
         plt.xlabel('Predicted label')
         return figure
+
+# Function for encoding the labels
+def convert_labels(labels):
+    cls_unq= np.unique(labels)
+    cls_count = cls_unq.shape[0]
+    label_array = np.zeros((labels.shape[0], cls_count))
+    for i in range(labels.shape[0]): 
+        idx = np.where(cls_unq == labels[i])
+        label_array[i, idx] = 1
+    return label_array
+
