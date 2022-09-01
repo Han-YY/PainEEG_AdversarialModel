@@ -33,7 +33,9 @@ class AdversarialModel:
         # loss_func: the loss function
 
         # Assign the values to variables
-        self.dataset = [data_samples, class_label, subject_label]
+        self.data_samples = data_samples
+        self.class_label = class_label
+        self.subject_label = subject_label
 
         # Get the number of classes and subjects involved in the classeification
         class_unique = np.unique(class_label)
@@ -60,27 +62,27 @@ class AdversarialModel:
         self.frame = Model(input_shape, [output, leakage])
         self.frame.compile(loss=[lambda x, y: CategoricalCrossentropy(x, y, from_logits=True),
                                     lambda x, y: CategoricalCrossentropy(x, y, from_logits=True)], 
-        loss_weights = [1., -1. * lam], optimizer=Adam(lr=1e-3, decay=1e-4), metrics=[tf.keras.metrics.Accuracy()])
+        loss_weights = [1., -1. * lam], optimizer=Adam(learning_rate=1e-3, decay=1e-4), metrics=[tf.keras.metrics.Accuracy()])
 
         self.adv_clf.trainable = True # Unfreeze the adversary classifier
         self.adv_clf.compile(loss=lambda x, y: CategoricalCrossentropy(x, y, from_logits=True), 
-                                     loss_weights=self.lam, optimizer=Adam(lr=1e-3, decay=1e-4), metrics=[tf.keras.metrics.Accuracy()])
+                                     loss_weights=self.lam, optimizer=Adam(learning_rate=1e-3, decay=1e-4), metrics=[tf.keras.metrics.Accuracy()])
 
     # The function for training the model with speficified loss
     
-    def train(self, log, early_stopping_after_epochs=10, epochs=500, batch_size=40, run_name=''):
+    def train(self, log, early_stopping_after_epochs=10, epochs=50, batch_size=200, run_name=''):
         self.writer = tf.summary.create_file_writer(log+'/tensorboard_logs/'+run_name+'/')
         monitoring_adv_val_acc = list()
 
         # Split the data into training and testing sets
         # Shuffle the indices
-        dataset_indices = list(range(self.dataset[0].shape[0]))
+        dataset_indices = list(range(self.data_samples.shape[0]))
         random.shuffle(dataset_indices)
-        train_idx = dataset_indices[0:int(0.75 * self.dataset[0].shape[0])]
-        test_idx = dataset_indices[int(0.75 * self.dataset[0].shape[0]):]
+        train_idx = dataset_indices[0:int(0.75 * self.data_samples[0].shape[0])]
+        test_idx = dataset_indices[int(0.75 * self.data_samples[0].shape[0]):]
 
-        x_train, y_train, s_train = self.dataset[0][train_idx], prep.convert_labels(self.dataset[1][train_idx]), prep.convert_labels(self.dataset[2][train_idx])
-        x_test, y_test, s_test = self.dataset[0][test_idx], prep.convert_labels(self.dataset[1][test_idx]), prep.convert_labels(self.dataset[2][test_idx])
+        x_train, y_train, s_train = self.data_samples[train_idx], self.class_label[train_idx], self.subject_label[train_idx]
+        x_test, y_test, s_test = self.data_samples[test_idx], self.class_label[test_idx], self.subject_label[test_idx]
 
 
         train_index = np.arange(y_train.shape[0])
@@ -92,6 +94,7 @@ class AdversarialModel:
         es_best = np.Inf
         es_best_weights = None
 
+
         for epoch in range(1, epochs + 1):
             print('[{} - {}] Epoch {}/{}'.format(run_name, str(self.lam), epoch, epochs))
             np.random.shuffle(train_index)
@@ -102,8 +105,8 @@ class AdversarialModel:
                 y_train_batch = y_train[batch_ids]
                 s_train_batch = s_train[batch_ids]
                 
-                self.adv_clf.train_on_batch(x_train_batch, s_train_batch)
-                train_log.append(self.main_clf.train_on_batch(x_train_batch, [y_train_batch, s_train_batch]))
+                self.adv_clf.train_on_batch(x=x_train_batch, y=s_train_batch)
+                train_log.append(self.main_clf.train_on_batch(x=x_train_batch, y=[y_train_batch, s_train_batch]))
 
             train_log = np.mean(train_log, axis=0)
             val_log = self.main_clf.test_on_batch(x_test, [y_test, s_test])
@@ -170,9 +173,17 @@ class AdversarialModel:
         self.writer.flush()
         
     # Function for fitting the main classifier simply
-    def fit(self, train_set, test_set, epochs=500, batch_size=10, callbacks=None):
-        x_train, y_train, p_train = train_set #last two components are adversary
-        x_test, y_test, p_test = test_set
+    def fit(self, epochs=500, batch_size=10, callbacks=None):
+        # x_train, y_train, p_train = train_set #last two components are adversary
+        # x_test, y_test, p_test = test_set
+        dataset_indices = list(range(self.data_samples.shape[0]))
+        random.shuffle(dataset_indices)
+        train_idx = dataset_indices[0:int(0.75 * (self.data_samples.shape[0]))]
+        test_idx = dataset_indices[int(0.75 * (self.data_samples.shape[0])):]
 
-        self.main_clf.fit([x_train], [y_train, p_train], validation_data= ([x_test], [y_test, p_test]), 
+        x_train, y_train, s_train = self.data_samples[train_idx], self.class_label[train_idx], self.subject_label[train_idx]
+        x_test, y_test, s_test = self.data_samples[test_idx], self.class_label[test_idx], self.subject_label[test_idx]
+
+
+        self.main_clf.fit([x_train], [y_train, s_train], validation_data= ([x_test], [y_test, s_test]), 
                     epochs = epochs, batch_size= batch_size, callbacks=callbacks, verbose = 2)
