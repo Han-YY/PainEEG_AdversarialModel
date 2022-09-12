@@ -26,8 +26,8 @@ def classifier_model(class_count):
     x = layers.Activation('relu')(x)
     x = layers.Flatten()(x)
     x = layers.Activation('sigmoid')(x)
-    out = layers.Dense(class_count)(x)
-    # out = layers.Softmax()(x)
+    x = layers.Dense(class_count)(x)
+    out = layers.Softmax()(x)
     model = keras.Model(inputs=Input_words, outputs=[out], name='main_clf')
 
     return model

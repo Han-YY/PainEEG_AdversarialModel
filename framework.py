@@ -7,7 +7,7 @@ from tensorflow.keras import layers
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.metrics import CategoricalCrossentropy
 import tensorflow as tf
-import trans_net
+import trans_net_tf
 from sklearn.model_selection import train_test_split
 import tensorflow as tf
 
@@ -47,8 +47,8 @@ class AdversarialModel:
         self.lam = lam
         
 
-        self.main_clf = trans_net.classifier_model(class_count=class_count)
-        self.adv_clf = trans_net.adversary_model(sub_count=subject_count)
+        self.main_clf = trans_net_tf.classifier_model(class_count=class_count)
+        self.adv_clf = trans_net_tf.adversary_model(sub_count=subject_count)
         # self.main_clf.summary()
 
         # Compile the model with the loss function for adapting the adversarial process
