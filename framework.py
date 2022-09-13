@@ -113,7 +113,7 @@ class AdversarialModel:
                 adv_loss = self.criterion(output, label)
 
                 # Optimize the losses
-                mix_loss = main_loss - adv_loss # For maximizing the main loss and minimize the adversary loss
+                mix_loss = main_loss - 0.001 * adv_loss # For maximizing the main loss and minimize the adversary loss
                 mix_loss.backward()
                 self.adv_optim.step()
                 self.main_optim.step()
