@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.function as F
+import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 import trans_net
 from sklearn.model_selection import train_test_split
@@ -20,8 +20,9 @@ nf = 100 # Size of z latent vector (size of adversary input)
 num_epochs = 5 # Number of training epochs
 lr = 0.0001 # Learning rate for Optimizers
 beta1 = 0.5 # Beta1 hyperparam for Adam optimizer
+ngpu = 0 # Number of GPUs (CHANGE IT WHEN RUNNING ON THE HPC)
 class AdversarialModel:
-    def __init__(self, data_samples, class_label, subject_label, lam=0.01):
+    def __init__(self, data_samples, class_label, subject_label):
          ### Parameters ###
         # data_samples: the feature trials
         # class_label: the labels of conditions
@@ -58,15 +59,65 @@ class AdversarialModel:
         self.adv_optim = torch.optim.Adam(self.adv_clf.parameters(), lr=0.001, betas=(beta1, 0.999))
 
     def train(self, log_path): 
+        # Define the device
+        device = torch.device("cuda:0" if (torch.cuda.is_available() and ngpu > 0) else "cpu")
         # Training Loop
 
         # Lists to keep track of progress
         img_list = []
-        G_losses = []
-        D_losses = []
+        main_losses = []
+        adv_losses = []
         iters = 0   
 
-        for i, data in enumerate(self.painDataset, 0):
+        # For each epoch
+        for epoch in range(num_epochs):
+            # For each batch in the dataloader
+            for i, data in enumerate(self.painDataset, 0):
+                ################
+                # Update the main classifier (minimize the loss)
+                self.main_clf.zero_grad()
+                # Format the batch
+                data_sample = data[0]
+                label = data[1]
+                # Forward the labels through the main classifier
+                output = self.main_clf(data_sample)
+                # Calculate the loss
+                main_loss = self.criterion(output, label)
+                # Calculate the gradients for the main_clf in backward pass
+                main_loss.backward()
+                main_x = output.mean().item()
+                self.main_optim.step()
+
+            
+
+                ########################
+                # Train the adversary classifier (maximize the loss)
+                self.adv_clf.zero_grad()
+                label = data[2].to(device)
+                output = self.adv_clf(data_sample)
+                # Loss of the adversary model
+                adv_loss = self.criterion(output, label)
+                mix_loss = main_loss - adv_loss # For maximizing the main loss and minimize the adversary loss
+                mix_loss.backward()
+                self.adv_optim.step()
+                adv_x = output.mean().item()
+
+                 # Output training stats
+                if i % 50 == 0:
+                    print('[%d/%d][%d/%d]\tLoss_D: %.4f\tLoss_G: %.4f\tD(x): %.4f\tD(G(z)): %.4f / %.4f'
+                        % (epoch, num_epochs, i, len(self.painDataset),
+                            main_loss.item(), adv_loss.item(), mix_loss.item(), main_x, adv_x))
+
+                # Save Losses for plotting later
+                main_losses.append(main_loss.item())
+                adv_losses.append(adv_loss.item())
+
+                iters += 1
+
+
+
+
+            
             
 
 
