@@ -58,14 +58,23 @@ class PainDataset(Dataset):
     def __init__(self, data_samples, class_labels, subject_labels):
 
         self.data_samples = data_samples
-        self.class_labels = class_labels
-        # Convert the subject labels into sequential int labels for classification
-        subject_unique, unique_idx = np.unique(subject_labels, return_inverse=True)
+
+        # Convert the class labels into array
+        class_unique = np.unique(class_labels)
+        class_unique = class_unique.tolist()
+        class_count = len(class_unique)
+        class_labels_n = np.zeros((class_labels.shape[0], class_count))
+        for i in range(class_labels.shape[0]):
+            class_labels_n[i, class_unique.index(class_labels[i])] = 1
+        self.class_labels = class_labels_n
+        
+        # Convert the subject labels into array
+        subject_unique = np.unique(subject_labels)
         subject_unique = subject_unique.tolist()
-        # subject_count = subject_unique.shape[0]
-        subject_labels_n = []
-        for subject_label in subject_labels:
-            subject_labels_n.append(subject_unique.index(subject_label))
+        subject_count = len(subject_unique)
+        subject_labels_n = np.zeros((subject_labels.shape[0], subject_count))
+        for i in range(subject_labels.shape[0]):
+            subject_labels_n[i, subject_unique.index(subject_labels[i])] = 1
         self.subject_labels = subject_labels_n
     
     def __len__(self):
@@ -77,8 +86,8 @@ class PainDataset(Dataset):
         
         orig_shape = self.data_samples[idx].shape
         data_sample = torch.from_numpy(np.reshape(self.data_samples[idx], newshape=(orig_shape[2], orig_shape[0], orig_shape[1]))).float()
-        class_label = self.class_labels[idx]
-        subject_label = self.subject_labels[idx]
+        class_label = torch.from_numpy(self.class_labels[idx])
+        subject_label = torch.from_numpy(self.subject_labels[idx])
 
         sample = {'data_sample': data_sample, 'class': class_label, 'subject': subject_label}
 

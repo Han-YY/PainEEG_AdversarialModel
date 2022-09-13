@@ -13,11 +13,11 @@ import data_prep_func as prep
 import random
 
 ### The basic parameters for training and testing
-batch_size = 128 # Batch size during training
+batch_size = 256 # Batch size during training
 image_size = 32 # The size of width and height of the connectivity matrix
 nc = 1 # Number of channels
 nf = 100 # Size of z latent vector (size of adversary input)
-num_epochs = 5 # Number of training epochs
+num_epochs = 20 # Number of training epochs
 lr = 0.0001 # Learning rate for Optimizers
 beta1 = 0.5 # Beta1 hyperparam for Adam optimizer
 ngpu = 0 # Number of GPUs (CHANGE IT WHEN RUNNING ON THE HPC)
@@ -78,6 +78,8 @@ class AdversarialModel:
         # Lists to keep track of progress
         main_losses = []
         adv_losses = []
+        main_accs = []
+        adv_accs = []
         iters = 0   
 
         # For each epoch
@@ -85,6 +87,8 @@ class AdversarialModel:
             
             # For each batch in the dataloader
             dataloader = DataLoader(self.painDataset_train, batch_size=batch_size, shuffle=True)
+            main_acc = 0
+            adv_acc = 0
             for i, data in enumerate(dataloader, 0):
                 
                 ################
@@ -92,7 +96,7 @@ class AdversarialModel:
                 self.main_clf.zero_grad()
                 # Format the batch
                 data_sample = data['data_sample']
-                label = data['class']
+                label = data['class'].float()
                 # Forward the labels through the main classifier
                 output = self.main_clf(data_sample)
                 # Calculate the loss
@@ -100,6 +104,7 @@ class AdversarialModel:
                 # Calculate the gradients for the main_clf in backward pass
                 
                 main_x = output.mean().item()
+                main_acc += (torch.argmax(output, dim=1) == torch.argmax(label, dim=1)).float().sum()
                 
 
             
@@ -107,17 +112,18 @@ class AdversarialModel:
                 ########################
                 # Train the adversary classifier (maximize the loss)
                 self.adv_clf.zero_grad()
-                label = data['subject'].long()
+                label = data['subject'].float()
                 output = self.adv_clf(data_sample)
                 # Loss of the adversary model
-                adv_loss = self.criterion(output, label)
+                adv_loss = self.criterion(output, label) * 0.0001
 
                 # Optimize the losses
-                mix_loss = main_loss - 0.001 * adv_loss # For maximizing the main loss and minimize the adversary loss
+                mix_loss = main_loss - adv_loss # For maximizing the main loss and minimize the adversary loss
                 mix_loss.backward()
                 self.adv_optim.step()
                 self.main_optim.step()
                 adv_x = output.mean().item()
+                adv_acc += (torch.argmax(output, dim=1) == torch.argmax(label, dim=1)).float().sum()
 
                  # Output training stats
                 if i % 50 == 0:
@@ -130,8 +136,13 @@ class AdversarialModel:
                 adv_losses.append(adv_loss.item())
 
                 iters += 1
+            main_acc_epoch = 100 * main_acc / len(self.painDataset_train)
+            adv_acc_epoch = 100 * adv_acc / len(self.painDataset_train)
 
-        return main_losses, adv_losses
+            main_accs.append(main_acc_epoch)
+            adv_accs.append(adv_acc_epoch)
+
+        return main_losses, adv_losses, main_accs, adv_accs
 
 
 
