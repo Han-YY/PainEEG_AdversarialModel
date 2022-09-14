@@ -18,7 +18,7 @@ batch_size = 256 # Batch size during training
 image_size = 32 # The size of width and height of the connectivity matrix
 nc = 1 # Number of channels
 nf = 100 # Size of z latent vector (size of adversary input)
-num_epochs = 100 # Number of training epochs
+num_epochs = 50 # Number of training epochs
 lr = 0.0001 # Learning rate for Optimizers
 beta1 = 0.5 # Beta1 hyperparam for Adam optimizer
 ngpu = 0 # Number of GPUs (CHANGE IT WHEN RUNNING ON THE HPC)
@@ -96,15 +96,15 @@ class AdversarialModel:
         for epoch in range(num_epochs):
             
             # For each batch in the dataloader
-            dataloader = DataLoader(self.painDataset_train, batch_size=batch_size, shuffle=True)
+            dataloader_train = DataLoader(self.painDataset_train, batch_size=batch_size, shuffle=True, num_workers=4)
             main_acc = 0
             adv_acc = 0
-            for i, data in enumerate(dataloader, 0):
+            for i, data in enumerate(dataloader_train, 0):
                 
                 ################
                 # Update the main classifier (minimize the loss)
                 self.main_clf.zero_grad()
-                self.main_clf.train()
+                
                 # Format the batch
                 data_sample = data['data_sample']
                 label = data['class'].float()
@@ -123,7 +123,7 @@ class AdversarialModel:
                 ########################
                 # Train the adversary classifier (maximize the loss)
                 self.adv_clf.zero_grad()
-                self.adv_clf.train()
+                
                 label = data['subject'].float()
                 output = self.adv_clf(data_sample)
                 # Loss of the adversary model
@@ -141,7 +141,7 @@ class AdversarialModel:
                  # Output training stats
                 if i % 50 == 0:
                     print('[%d/%d][%d/%d]\tLoss_main: %.4f\tLoss_adv: %.4f\tLoss(x): %.4f\tD(G(x)): %.4f / %.4f'
-                        % (epoch, num_epochs, i, len(self.painDataset_train),
+                        % (epoch+1, num_epochs, i, len(self.painDataset_train),
                             main_loss.item(), adv_loss.item(), mix_loss.item(), main_x, adv_x))
 
                 # Save Losses for plotting later
@@ -152,22 +152,26 @@ class AdversarialModel:
             main_acc_epoch = 100 * main_acc / len(self.painDataset_train)
             adv_acc_epoch = 100 * adv_acc / len(self.painDataset_train)
 
-            main_accs.append(main_acc_epoch)
-            adv_accs.append(adv_acc_epoch)
+            main_accs.append(main_acc_epoch.float())
+            adv_accs.append(adv_acc_epoch.float())
         
         # Test the main classifier with the testing dataset
-        data_test = next(iter(self.painDataset_test))
+        dataloader_test = DataLoader(self.painDataset_test, batch_size=batch_size, shuffle=True, num_workers=4)
+        data_test = next(iter(dataloader_test))
         X_test = data_test['data_sample']
         y_test = data_test['class']
 
-        # Predict the classes of the testing input dataset
-        self.main_clf.eval() # Set the model as evaluation mode
-        outputs_test = self.main_clf(X_test)
-        _, preds = torch.max(outputs_test, 1)
-        cf_matrix = confusion_matrix(y_test, preds.numpy())
-        pred_acc = accuracy_score(y_test, preds.numpy())
+        # Retrain the models with only the labels of subjects
 
-        return main_losses, adv_losses, main_accs.numpy(), adv_accs.numpy(), cf_matrix, pred_acc
+        # Predict the classes of the testing input dataset
+        with torch.no_grad():
+            # self.main_clf.eval() # Set the model as evaluation mode
+            output_test = self.main_clf(X_test)
+            preds = torch.argmax(output_test, dim=1)
+            cf_matrix = confusion_matrix(y_test, preds)
+            pred_acc = accuracy_score(y_test, preds)
+
+        return main_losses, adv_losses, main_accs, adv_accs, cf_matrix, pred_acc
 
 
 

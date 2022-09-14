@@ -23,10 +23,7 @@ class main_clf(nn.Module):
 
     
     def forward(self, x):
-        x = self.conv1(x)
-        x = F.relu(x)
-        x = self.pool(x)
-        x = self.norm1(x)
+        x = self.norm1(self.pool(F.relu(self.conv1(x))))
         x = self.norm2(self.pool(F.relu(self.conv2(x))))
         x = self.norm3(self.pool(F.relu(self.conv3(x))))
         x = self.dropout(x)
