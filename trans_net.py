@@ -4,11 +4,22 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
 
+# The encoder for generating features based on the connectivity which has the least information about the individual differences and the most information about the conditions
+class encoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv = nn.Conv2d(1, 16, 3, padding=1, stride=1)
+    
+    def forward(self, x):
+        return self.conv(x)
+
+
+
 # The main classifier for classifying the pain-related conditions
 class main_clf(nn.Module):
     def __init__(self, class_count):
         super().__init__()
-        self.conv1 = nn.Conv2d(1, 128, 7, padding=3, stride=1)
+        self.conv1 = nn.Conv2d(16, 128, 7, padding=3, stride=1)
         self.pool = nn.MaxPool2d(3)
         self.norm1 = nn.BatchNorm2d(128)
         self.conv2 = nn.Conv2d(128, 64, 5, padding=2, stride=1)
@@ -18,7 +29,7 @@ class main_clf(nn.Module):
         self.dropout = nn.Dropout2d(p=0.2)
         self.fc1 = nn.Linear(in_features=32, out_features=100)
         self.fc2 = nn.Linear(in_features=100, out_features=class_count)
-        self.softmax = nn.Softmax()
+        self.softmax = nn.Softmax(dim=1)
 
 
     
@@ -31,7 +42,7 @@ class main_clf(nn.Module):
         x = torch.flatten(x, 1)
         x = F.relu(self.fc1(x))
         x = torch.flatten(x, 1)
-        x = F.sigmoid(x)
+        x = torch.sigmoid(x)
         x = self.softmax(self.fc2(x))
         return x
 
@@ -39,7 +50,7 @@ class main_clf(nn.Module):
 class adv_clf(nn.Module):
     def __init__(self, sub_count):
         super().__init__()
-        self.conv = nn.Conv2d(1, 16, 3, padding=1, stride=1)
+        self.conv = nn.Conv2d(16, 16, 3, padding=1, stride=1)
         self.norm = nn.BatchNorm2d(16)
         self.fc = nn.Linear(in_features=16384, out_features=sub_count)
         

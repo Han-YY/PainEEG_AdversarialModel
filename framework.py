@@ -22,9 +22,11 @@ num_epochs = 50 # Number of training epochs
 lr = 0.0001 # Learning rate for Optimizers
 beta1 = 0.5 # Beta1 hyperparam for Adam optimizer
 ngpu = 0 # Number of GPUs (CHANGE IT WHEN RUNNING ON THE HPC)
+# Decide which device we want to run on
+device = torch.device("cuda:0" if (torch.cuda.is_available() and ngpu > 0) else "cpu")
 
 class AdversarialModel:
-    def __init__(self, data_samples, class_label, subject_label, exclude_idx):
+    def __init__(self, data_samples, class_label, subject_label, exclude_idx, lam):
          ### Parameters ###
         # data_samples: the feature trials
         # class_label: the labels of conditions
@@ -33,19 +35,12 @@ class AdversarialModel:
         # adv_clf: the classifier classifying participants
         # loss_func: the loss function
         # exclude_idx: the INDEX of the exclude subject used as the training set
+        self.lam = lam
 
         # Assign the values to variables
         self.data_samples = data_samples
         self.class_label = class_label
         self.subject_label = subject_label
-
-        # Create the training and testing datasets
-        # Shuffle the indices
-        # dataset_indices = list(range(self.data_samples.shape[0]))
-
-        # random.shuffle(dataset_indices)
-        # train_idx = dataset_indices[0:int(0.75 * self.data_samples.shape[0])]
-        # test_idx = dataset_indices[int(0.75 * self.data_samples.shape[0]):]
 
 
         # Create the dataloader
@@ -61,24 +56,43 @@ class AdversarialModel:
         subject_count = subject_unique.shape[0]
 
         # Create the training set and the testing set according to the subject id
-        train_idx = np.where(subject_label != subject_unique[exclude_idx])
-        test_idx = np.where(subject_label == subject_unique[exclude_idx])
+        train_idx = [i for i, e in enumerate(subject_label) if e != subject_unique[exclude_idx]]
+        test_idx = [i for i, e in enumerate(subject_label) if e == subject_unique[exclude_idx]]
+
+        # Create the training and pre-training datasets
+        # Shuffle the indices
+        random.shuffle(train_idx)
+        
+        pre_idx = train_idx[int(0.75 * len(train_idx)):]
+        
+        train_idx_0 = train_idx[0:int(0.75 * len(train_idx))]
+        
 
         # Create the dataloader
-        self.painDataset_train = trans_net.PainDataset(data_samples[train_idx], class_label[train_idx], subject_label[train_idx])
+        self.painDataset_train = trans_net.PainDataset(data_samples[train_idx_0], class_label[train_idx_0], subject_label[train_idx_0])
+        self.painDataset_pre = trans_net.PainDataset(data_samples[pre_idx], class_label[pre_idx], subject_label[pre_idx])
         self.painDataset_test = trans_net.PainDataset(data_samples[test_idx], class_label[test_idx], subject_label[test_idx])
 
         # Assign the models
         self.main_clf = trans_net.main_clf(class_count)
         self.adv_clf = trans_net.adv_clf(subject_count-1)
+        # Handle multi-gpu if desired
+        if (device.type == 'cuda') and (ngpu > 1):
+            self.main_clf = nn.DataParallel(self.main_clf, list(range(ngpu)))
+            self.adv_clf = nn.DataParallel(self.adv_clf, list(range(ngpu)))
         # Initialize the weights
         self.main_clf.apply(trans_net.weights_init)
         self.adv_clf.apply(trans_net.weights_init)
+
+        # Initialize the encoder
+        self.enc = trans_net.encoder()
+        self.enc.apply(trans_net.weights_init)
 
         # Loss functions
         self.criterion = nn.CrossEntropyLoss() 
 
         # Optimizers
+        self.enc_optim = torch.optim.Adam(self.enc.parameters(), lr=1e-4, betas=(beta1, 0.999), weight_decay=1e-5)
         self.main_optim = torch.optim.Adam(self.main_clf.parameters(), lr=1e-4, betas=(beta1, 0.999), weight_decay=1e-5)
         self.adv_optim = torch.optim.Adam(self.adv_clf.parameters(), 1e-4, betas=(beta1, 0.999), weight_decay=1e-5)
 
@@ -90,7 +104,39 @@ class AdversarialModel:
         adv_losses = []
         main_accs = []
         adv_accs = []
+        adv_accs_pre = []
         iters = 0   
+
+        # Pre-train the adversary network to detect the features with high correlation to the individual differences
+        for epoch in range(num_epochs):
+            dataloader_pre = DataLoader(self.painDataset_pre, batch_size=batch_size, shuffle=True)
+            adv_acc = 0
+
+            for i, data in enumerate(dataloader_pre, 0):
+                self.adv_optim.zero_grad()
+                self.enc_optim.zero_grad()
+                self.adv_clf.train()
+
+                # Format the batch
+                data_sample = data['data_sample'].to(device)
+                data_enc = self.enc(data_sample)
+                label = data['subject'].long().to(device)
+                output = self.adv_clf(data_enc)
+                # Loss of the adversary model
+                adv_loss = self.criterion(output, label)
+
+                # Optimize the losses
+                adv_loss.backward()
+                self.adv_optim.step()
+                self.enc_optim.step()
+
+                adv_acc += (torch.argmax(output, dim=1) == label).float().sum()
+
+            adv_acc_epoch = 100 * adv_acc / len(self.painDataset_pre)
+            adv_accs_pre.append(adv_acc_epoch)
+        print('Pre-trained finished, the accuracy is: ' + str(adv_acc_epoch) + ' and the loss is: ' + str(adv_loss))
+
+
 
         # For each epoch
         for epoch in range(num_epochs):
@@ -103,15 +149,19 @@ class AdversarialModel:
                 
                 ################
                 # Update the main classifier (minimize the loss)
-                self.main_clf.zero_grad()
+                self.main_optim.zero_grad()
+                self.enc_optim.zero_grad()
+                self.main_clf.train()
                 
                 # Format the batch
-                data_sample = data['data_sample']
-                label = data['class'].float()
+                data_sample = data['data_sample'].to(device)
+                data_enc = self.enc(data_sample)
+
+                label = data['class'].long().to(device)
                 # Forward the labels through the main classifier
-                output = self.main_clf(data_sample)
+                output = self.main_clf(data_enc)
                 # Calculate the loss
-                main_loss = self.criterion(output, label.long())
+                main_loss = self.criterion(output, label)
                 # Calculate the gradients for the main_clf in backward pass
                 
                 main_x = output.mean().item()
@@ -122,16 +172,17 @@ class AdversarialModel:
 
                 ########################
                 # Train the adversary classifier (maximize the loss)
-                self.adv_clf.zero_grad()
+                self.adv_optim.zero_grad()
                 
-                label = data['subject'].float()
-                output = self.adv_clf(data_sample)
+                label = data['subject'].long().to(device)
+                output = self.adv_clf(data_enc)
                 # Loss of the adversary model
-                adv_loss = self.criterion(output, label.long()) * 0.0001
+                adv_loss = self.criterion(output, label) * 0.1
 
                 # Optimize the losses
-                mix_loss = main_loss + (-adv_loss) # For maximizing the main loss and minimize the adversary loss
+                mix_loss = main_loss + (-adv_loss) * self.lam # For maximizing the main loss and minimize the adversary loss
                 mix_loss.backward()
+                self.enc_optim.step()
                 self.adv_optim.step()
                 self.main_optim.step()
 
@@ -158,14 +209,14 @@ class AdversarialModel:
         # Test the main classifier with the testing dataset
         dataloader_test = DataLoader(self.painDataset_test, batch_size=batch_size, shuffle=True)
         data_test = next(iter(dataloader_test))
-        X_test = data_test['data_sample']
+        X_test = self.enc(data_test['data_sample'])
         y_test = data_test['class']
 
         # Retrain the models with only the labels of subjects
 
         # Predict the classes of the testing input dataset
         with torch.no_grad():
-            # self.main_clf.eval() # Set the model as evaluation mode
+            self.main_clf.eval() # Set the model as evaluation mode
             output_test = self.main_clf(X_test)
             preds = torch.argmax(output_test, dim=1)
             cf_matrix = confusion_matrix(y_test, preds)
