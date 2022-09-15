@@ -18,3 +18,5 @@ PainEEG_GenerativeModel/Untitled/
 framework.py
 *.npz
 *.pyc
+__pycache__/trans_net.cpython-38.pyc
+*.pyc
