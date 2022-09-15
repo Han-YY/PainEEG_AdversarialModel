@@ -79,8 +79,8 @@ class AdversarialModel:
         self.criterion = nn.CrossEntropyLoss() 
 
         # Optimizers
-        self.main_optim = torch.optim.Adam(self.main_clf.parameters(), lr=0.001, betas=(beta1, 0.999))
-        self.adv_optim = torch.optim.Adam(self.adv_clf.parameters(), lr=0.001, betas=(beta1, 0.999))
+        self.main_optim = torch.optim.Adam(self.main_clf.parameters(), lr=1e-4, betas=(beta1, 0.999), weight_decay=1e-5)
+        self.adv_optim = torch.optim.Adam(self.adv_clf.parameters(), 1e-4, betas=(beta1, 0.999), weight_decay=1e-5)
 
     def train(self): 
         # Training Loop
@@ -156,7 +156,7 @@ class AdversarialModel:
             adv_accs.append(adv_acc_epoch.float())
         
         # Test the main classifier with the testing dataset
-        dataloader_test = DataLoader(self.painDataset_test, batch_size=batch_size, shuffle=True, num_workers=4)
+        dataloader_test = DataLoader(self.painDataset_test, batch_size=batch_size, shuffle=True)
         data_test = next(iter(dataloader_test))
         X_test = data_test['data_sample']
         y_test = data_test['class']

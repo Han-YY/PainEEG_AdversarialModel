@@ -14,3 +14,5 @@ __pycache__/framework.cpython-38.pyc
 *.pyc
 *.pyc
 PainEEG_GenerativeModel/Untitled/
+*.ipynb
+framework.py
