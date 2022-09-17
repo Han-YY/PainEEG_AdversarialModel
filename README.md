@@ -41,6 +41,8 @@ Applying adversarial model into the model predicting pain with EEG for transfer 
 Some codes were adapted from https://github.com/philipph77/ACSE-Framework and https://pytorch.org/tutorials/beginner/dcgan_faces_tutorial.html
 # References:
 [1] Han, Y., Valentini, E., & Halder, S. (2022, July). Classification of Tonic Pain Experience based on Phase Connectivity in the Alpha Frequency Band of the Electroencephalogram using Convolutional Neural Networks. In 2022 44th Annual International Conference of the IEEE Engineering in Medicine & Biology Society (EMBC) (pp. 3542-3545). IEEE.
-\[2] Bethge, D., Hallgarten, P., Özdenizci, O., Mikut, R., Schmidt, A., & Grosse-Puppendahl, T. (2022). Exploiting Multiple EEG Data Domains with Adversarial Learning. arXiv preprint arXiv:2204.07777.
-\[3] Smedemark-Margulies, N., Wang, Y., Koike-Akino, T., & Erdogmus, D. (2022, July). AutoTransfer: Subject transfer learning with censored representations on biosignals data. In 2022 44th Annual International Conference of the IEEE Engineering in Medicine & Biology Society (EMBC) (pp. 3159-3165). IEEE.
+
+[2] Bethge, D., Hallgarten, P., Özdenizci, O., Mikut, R., Schmidt, A., & Grosse-Puppendahl, T. (2022). Exploiting Multiple EEG Data Domains with Adversarial Learning. arXiv preprint arXiv:2204.07777.
+
+[3] Smedemark-Margulies, N., Wang, Y., Koike-Akino, T., & Erdogmus, D. (2022, July). AutoTransfer: Subject transfer learning with censored representations on biosignals data. In 2022 44th Annual International Conference of the IEEE Engineering in Medicine & Biology Society (EMBC) (pp. 3159-3165). IEEE.
 
