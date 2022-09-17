@@ -11,7 +11,7 @@ The work in [2, 3] inspired me to use the adversarial model learning the feature
 The EEG signals were preprocessed in a pilot progress and the features were extracted and saved in .npz files.
 ### 1.2.1 Inter-site phase clustering (ISPC)
 The connectivity features were calculated as ISPCs:
-$$ ISPC_{xy}=|\frac{1}{n}\sum_{t=1}^{n}e^{i[\phi_x(t)-\phi_y(t)]}|$$
+$$ISPC_{xy}=|\frac{1}{n}\sum_{t=1}^{n}e^{i[\phi_x(t)-\phi_y(t)]}|$$
 where x and y are channels x and y, $\phi_x(t)$ means the phase of channel x at time point t.
 
 ### 1.2.2 Size of features
