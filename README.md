@@ -11,7 +11,7 @@ The work in [2, 3] inspired me to use the adversarial model learning the feature
 The EEG signals were preprocessed in a pilot progress and the features were extracted and saved in .npz files.
 ### 1.2.1 Inter-site phase clustering (ISPC)
 The connectivity features were calculated as ISPCs:
-$ ISPC_{xy}=|\frac{1}{n}\sum_{t=1}^{n}e^{i[\phi_x(t)-\phi_y(t)]}|$
+$$ISPC_{xy}=|\frac{1}{n}\sum_{t=1}^{n}e^{i[\phi_x(t)-\phi_y(t)]}|$$
 where x and y are channels x and y, $\phi_x(t)$ means the phase of channel x at time point t.
 
 ### 1.2.2 Size of features
@@ -36,11 +36,13 @@ The adversary classifier to classify the participant ids, whose loss is minimize
 # 3 Framework
 - exclude_id: the excluded participant's id for testing the transfer learning performance
 - lam: lambda for controling the weights of the adversary network's loss
-- 
+
 Applying adversarial model into the model predicting pain with EEG for transfer learning
 Some codes were adapted from https://github.com/philipph77/ACSE-Framework and https://pytorch.org/tutorials/beginner/dcgan_faces_tutorial.html
 # References:
 [1] Han, Y., Valentini, E., & Halder, S. (2022, July). Classification of Tonic Pain Experience based on Phase Connectivity in the Alpha Frequency Band of the Electroencephalogram using Convolutional Neural Networks. In 2022 44th Annual International Conference of the IEEE Engineering in Medicine & Biology Society (EMBC) (pp. 3542-3545). IEEE.
+
 [2] Bethge, D., Hallgarten, P., Özdenizci, O., Mikut, R., Schmidt, A., & Grosse-Puppendahl, T. (2022). Exploiting Multiple EEG Data Domains with Adversarial Learning. arXiv preprint arXiv:2204.07777.
+
 [3] Smedemark-Margulies, N., Wang, Y., Koike-Akino, T., & Erdogmus, D. (2022, July). AutoTransfer: Subject transfer learning with censored representations on biosignals data. In 2022 44th Annual International Conference of the IEEE Engineering in Medicine & Biology Society (EMBC) (pp. 3159-3165). IEEE.
 
