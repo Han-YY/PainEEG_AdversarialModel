@@ -8,10 +8,19 @@ import numpy as np
 class encoder(nn.Module):
     def __init__(self):
         super().__init__()
-        self.conv = nn.Conv2d(1, 16, 3, padding=1, stride=1)
+        self.conv1 = nn.Conv2d(1, 128, 7, padding=3, stride=1)
+        self.pool = nn.MaxPool2d(3)
+        self.norm1 = nn.BatchNorm2d(128)
+        self.conv2 = nn.Conv2d(128, 64, 5, padding=2, stride=1)
+        self.norm2 = nn.BatchNorm2d(64)
+        self.conv3 = nn.Conv2d(64, 32, 3, padding=1, stride=1)
+        self.norm3 = nn.BatchNorm2d(32)
     
     def forward(self, x):
-        return self.conv(x)
+        x = self.norm1(self.pool(F.relu(self.conv1(x))))
+        x = self.norm2(self.pool(F.relu(self.conv2(x))))
+        # x = self.norm3(self.pool(F.relu(self.conv3(x))))
+        return x
 
 
 
@@ -19,7 +28,7 @@ class encoder(nn.Module):
 class main_clf(nn.Module):
     def __init__(self, class_count):
         super().__init__()
-        self.conv1 = nn.Conv2d(16, 128, 7, padding=3, stride=1)
+        self.conv1 = nn.Conv2d(1, 128, 7, padding=3, stride=1)
         self.pool = nn.MaxPool2d(3)
         self.norm1 = nn.BatchNorm2d(128)
         self.conv2 = nn.Conv2d(128, 64, 5, padding=2, stride=1)
@@ -34,8 +43,8 @@ class main_clf(nn.Module):
 
     
     def forward(self, x):
-        x = self.norm1(self.pool(F.relu(self.conv1(x))))
-        x = self.norm2(self.pool(F.relu(self.conv2(x))))
+        # x = self.norm1(self.pool(F.relu(self.conv1(x))))
+        # x = self.norm2(self.pool(F.relu(self.conv2(x))))
         x = self.norm3(self.pool(F.relu(self.conv3(x))))
         x = self.dropout(x)
         # Flatten
@@ -50,14 +59,16 @@ class main_clf(nn.Module):
 class adv_clf(nn.Module):
     def __init__(self, sub_count):
         super().__init__()
-        self.conv = nn.Conv2d(16, 16, 3, padding=1, stride=1)
-        self.norm = nn.BatchNorm2d(16)
-        self.fc = nn.Linear(in_features=16384, out_features=sub_count)
+        self.conv = nn.Conv2d(64, 128, 3, padding=1, stride=1)
+        self.norm = nn.BatchNorm2d(128)
+        self.fc = nn.Linear(in_features=1152, out_features=sub_count)
+        self.softmax = nn.Softmax(dim=1)
         
     def forward(self, x):
         x = self.norm(self.conv(x))
         x = torch.flatten(x, 1)
         x = self.fc(x)
+        x = self.softmax(x)
 
         return x
 

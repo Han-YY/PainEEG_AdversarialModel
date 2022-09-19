@@ -20,3 +20,7 @@ framework.py
 *.pyc
 __pycache__/trans_net.cpython-38.pyc
 *.pyc
+__pycache__/trans_net.cpython-38.pyc
+*.pyc
+framework.py
+trans_net.py

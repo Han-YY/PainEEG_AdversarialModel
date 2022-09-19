@@ -6,6 +6,7 @@ from torch.utils.data import Dataset, DataLoader
 import trans_net
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix, accuracy_score
+from sklearn.model_selection import KFold
 
 
 import pandas as pd
@@ -14,19 +15,20 @@ import data_prep_func as prep
 import random
 
 ### The basic parameters for training and testing
-batch_size = 256 # Batch size during training
+batch_size = 512 # Batch size during training
 image_size = 32 # The size of width and height of the connectivity matrix
 nc = 1 # Number of channels
 nf = 100 # Size of z latent vector (size of adversary input)
-num_epochs = 50 # Number of training epochs
+num_epochs = 200 # Number of training epochs
 lr = 0.0001 # Learning rate for Optimizers
-beta1 = 0.5 # Beta1 hyperparam for Adam optimizer
+beta1 = 0.9 # Beta1 hyperparam for Adam optimizer
+k_fold = 10 # Number of folds in cross-validation
 ngpu = 0 # Number of GPUs (CHANGE IT WHEN RUNNING ON THE HPC)
 # Decide which device we want to run on
 device = torch.device("cuda:0" if (torch.cuda.is_available() and ngpu > 0) else "cpu")
 
 class AdversarialModel:
-    def __init__(self, data_samples, class_label, subject_label, exclude_idx, lam):
+    def __init__(self, data_samples, class_label, subject_label, exclude_idx, lam1, lam2):
          ### Parameters ###
         # data_samples: the feature trials
         # class_label: the labels of conditions
@@ -35,7 +37,10 @@ class AdversarialModel:
         # adv_clf: the classifier classifying participants
         # loss_func: the loss function
         # exclude_idx: the INDEX of the exclude subject used as the training set
-        self.lam = lam
+        # lam1: relative convergence rate of the adversary network to the main network
+        # lam2: relative convergence rate of the loss targetting at minimizing the loss of the adversary network to its maximization
+        self.lam1 = lam1
+        self.lam2 = lam2
 
         # Assign the values to variables
         self.data_samples = data_samples
@@ -75,7 +80,7 @@ class AdversarialModel:
 
         # Assign the models
         self.main_clf = trans_net.main_clf(class_count)
-        self.adv_clf = trans_net.adv_clf(subject_count-1)
+        self.adv_clf = trans_net.adv_clf(subject_count-1) 
         # Handle multi-gpu if desired
         if (device.type == 'cuda') and (ngpu > 1):
             self.main_clf = nn.DataParallel(self.main_clf, list(range(ngpu)))
@@ -95,8 +100,10 @@ class AdversarialModel:
         self.enc_optim = torch.optim.Adam(self.enc.parameters(), lr=1e-4, betas=(beta1, 0.999), weight_decay=1e-5)
         self.main_optim = torch.optim.Adam(self.main_clf.parameters(), lr=1e-4, betas=(beta1, 0.999), weight_decay=1e-5)
         self.adv_optim = torch.optim.Adam(self.adv_clf.parameters(), 1e-4, betas=(beta1, 0.999), weight_decay=1e-5)
+    
 
     def train(self): 
+        torch.manual_seed(3407)# The magical seed
         # Training Loop
 
         # Lists to keep track of progress
@@ -107,112 +114,180 @@ class AdversarialModel:
         adv_accs_pre = []
         iters = 0   
 
+        # Define the K-fold cross-validator
+        kfold = KFold(n_splits=k_fold, shuffle=True)
+
         # Pre-train the adversary network to detect the features with high correlation to the individual differences
-        for epoch in range(num_epochs):
-            dataloader_pre = DataLoader(self.painDataset_pre, batch_size=batch_size, shuffle=True)
-            adv_acc = 0
-
-            for i, data in enumerate(dataloader_pre, 0):
-                self.adv_optim.zero_grad()
-                self.enc_optim.zero_grad()
-                self.adv_clf.train()
-
-                # Format the batch
-                data_sample = data['data_sample'].to(device)
-                data_enc = self.enc(data_sample)
-                label = data['subject'].long().to(device)
-                output = self.adv_clf(data_enc)
-                # Loss of the adversary model
-                adv_loss = self.criterion(output, label)
-
-                # Optimize the losses
-                adv_loss.backward()
-                self.adv_optim.step()
-                self.enc_optim.step()
-
-                adv_acc += (torch.argmax(output, dim=1) == label).float().sum()
-
-            adv_acc_epoch = 100 * adv_acc / len(self.painDataset_pre)
-            adv_accs_pre.append(adv_acc_epoch)
-        print('Pre-trained finished, the accuracy is: ' + str(adv_acc_epoch) + ' and the loss is: ' + str(adv_loss))
-
-
-
-        # For each epoch
-        for epoch in range(num_epochs):
+        for fold, (train_ids, test_ids) in enumerate(kfold.split(self.painDataset_pre)):
+            # Sample elements randomly from a given list of ids, no replacement.
+            # Sample elements randomly from a given list of ids, no replacement.
+            train_subsampler = torch.utils.data.SubsetRandomSampler(train_ids)
+            test_subsampler = torch.utils.data.SubsetRandomSampler(test_ids)
             
-            # For each batch in the dataloader
-            dataloader_train = DataLoader(self.painDataset_train, batch_size=batch_size, shuffle=True, num_workers=4)
-            main_acc = 0
-            adv_acc = 0
-            for i, data in enumerate(dataloader_train, 0):
-                
-                ################
-                # Update the main classifier (minimize the loss)
-                self.main_optim.zero_grad()
-                self.enc_optim.zero_grad()
-                self.main_clf.train()
-                
-                # Format the batch
-                data_sample = data['data_sample'].to(device)
-                data_enc = self.enc(data_sample)
+            # Define data loaders for training and testing data in this fold
+            trainloader = torch.utils.data.DataLoader(self.painDataset_pre, batch_size=10, sampler=train_subsampler)
+            testloader = torch.utils.data.DataLoader(self.painDataset_pre, batch_size=10, samsampler=test_subsampler)
+            for epoch in range(num_epochs):
+                # dataloader_pre = DataLoader(self.painDataset_pre, batch_size=batch_size, shuffle=True)
+                adv_acc = 0
 
-                label = data['class'].long().to(device)
-                # Forward the labels through the main classifier
-                output = self.main_clf(data_enc)
-                # Calculate the loss
-                main_loss = self.criterion(output, label)
-                # Calculate the gradients for the main_clf in backward pass
-                
-                main_x = output.mean().item()
-                main_acc += (torch.argmax(output, dim=1) == label).float().sum()
-                
+                for i, data in enumerate(trainloader, 0):
+                    self.adv_optim.zero_grad()
+                    self.enc_optim.zero_grad()
+                    self.adv_clf.train()
 
+                    # Format the batch
+                    data_sample = data['data_sample'].to(device)
+                    data_enc = self.enc(data_sample)
+                    label = data['subject'].long().to(device)
+                    output = self.adv_clf(data_enc)
+                    # Loss of the adversary model
+                    adv_loss = self.criterion(output, label)
+
+                    # Optimize the losses
+                    adv_loss.backward()
+                    self.adv_optim.step()
+                    self.enc_optim.step()
+
+                    adv_acc += (torch.argmax(output, dim=1) == label).float().sum()
+
+            # Evaluation for this fold
+            correct, total = 0, 0
+            with torch.no_grad():
+
+                # Iterate over the test data and generate predictions
+                for i, data in enumerate(testloader, 0):
+
+                    # Get inputs
+                    data_sample = data['data_sample'].to(device)
+                    data_enc = self.enc(data_sample)
+                    targets = data['subject'].long().to(device)
+
+                    # Generate outputs
+                    outputs = self.adv_clf(data_enc)
+
+                    # Set total and correct
+                    _, predicted = torch.max(outputs.data, 1)
+                    total += targets.size(0)
+                    correct += (predicted == targets).sum().item()
+
+                adv_acc_epoch = 100.0 * (correct / total)
+                adv_accs_pre.append(adv_acc_epoch)
+            print('Pre-trained finished, the accuracy is: ' + str(adv_acc_epoch) + ' and the loss is: ' + str(adv_loss))
+
+        # Trainiing the main classifier with 10-fold validation
+        for fold, (train_ids, test_ids) in enumerate(kfold.split(self.painDataset_train)):
+            # Sample elements randomly from a given list of ids, no replacement.
+            # Sample elements randomly from a given list of ids, no replacement.
+            train_subsampler = torch.utils.data.SubsetRandomSampler(train_ids)
+            test_subsampler = torch.utils.data.SubsetRandomSampler(test_ids)
             
-
-                ########################
-                # Train the adversary classifier (maximize the loss)
-                self.adv_optim.zero_grad()
+            # Define data loaders for training and testing data in this fold
+            trainloader = torch.utils.data.DataLoader(self.painDataset_train, batch_size=10, sampler=train_subsampler)
+            testloader = torch.utils.data.DataLoader(self.painDataset_train, batch_size=10, samsampler=test_subsampler)
+            for epoch in range(num_epochs):
                 
-                label = data['subject'].long().to(device)
-                output = self.adv_clf(data_enc)
-                # Loss of the adversary model
-                adv_loss = self.criterion(output, label) * 0.1
+                # For each batch in the dataloader
+                # dataloader_train = DataLoader(self.painDataset_train, batch_size=batch_size, shuffle=True, num_workers=4)
+                main_acc, adv_acc = 0, 0
+                
+                for i, data in enumerate(trainloader, 0):
+                    
+                    ################
+                    # Update the main classifier (minimize the loss)
+                    self.main_optim.zero_grad()
+                    self.enc_optim.zero_grad()
+                    self.main_clf.train()
+                    
+                    # Format the batch
+                    data_sample = data['data_sample'].to(device)
+                    data_enc = self.enc(data_sample)
 
-                # Optimize the losses
-                mix_loss = main_loss + (-adv_loss) * self.lam # For maximizing the main loss and minimize the adversary loss
-                mix_loss.backward()
-                self.enc_optim.step()
-                self.adv_optim.step()
-                self.main_optim.step()
+                    label = data['class'].long().to(device)
+                    # Forward the labels through the main classifier
+                    output = self.main_clf(data_enc)
+                    # Calculate the loss
+                    main_loss = self.criterion(output, label)
+                    # Calculate the gradients for the main_clf in backward pass
+                    
+                    main_x = output.mean().item()
+                    main_acc += (torch.argmax(output, dim=1) == label).float().sum()
+                    
 
-                adv_x = output.mean().item()
-                adv_acc += (torch.argmax(output, dim=1) == label).float().sum()
+                
 
-                 # Output training stats
-                if i % 50 == 0:
-                    print('[%d/%d][%d/%d]\tLoss_main: %.4f\tLoss_adv: %.4f\tLoss(x): %.4f\tD(G(x)): %.4f / %.4f'
-                        % (epoch+1, num_epochs, i, len(self.painDataset_train),
-                            main_loss.item(), adv_loss.item(), mix_loss.item(), main_x, adv_x))
+                    ########################
+                    # Train the adversary classifier (maximize the loss)
+                    self.adv_optim.zero_grad()
+                    
+                    label = data['subject'].long().to(device)
+                    output = self.adv_clf(data_enc)
+                    # Loss of the adversary model
+                    adv_loss = self.criterion(output, label) * 0.1 * self.lam1
 
-                # Save Losses for plotting later
-                main_losses.append(main_loss.item())
-                adv_losses.append(adv_loss.item())
+                    # Optimize the losses
+                    mix_loss = main_loss + (-adv_loss) # For maximizing the main loss and minimize the adversary loss
+                    adv_loss_control = adv_loss * self.lam2
+                    adv_loss_control.backward(retain_graph=True)
+                    mix_loss.backward()
+                    self.adv_optim.step()
+                    self.enc_optim.step()   
+                    self.main_optim.step()
 
-                iters += 1
-            main_acc_epoch = 100 * main_acc / len(self.painDataset_train)
-            adv_acc_epoch = 100 * adv_acc / len(self.painDataset_train)
+                    adv_x = output.mean().item()
+                    adv_acc += (torch.argmax(output, dim=1) == label).float().sum()
 
-            main_accs.append(main_acc_epoch.float())
-            adv_accs.append(adv_acc_epoch.float())
-        
-        # Test the main classifier with the testing dataset
-        dataloader_test = DataLoader(self.painDataset_test, batch_size=batch_size, shuffle=True)
-        data_test = next(iter(dataloader_test))
-        X_test = self.enc(data_test['data_sample'])
-        y_test = data_test['class']
 
-        # Retrain the models with only the labels of subjects
+                    # Output training stats
+                    if i % 50 == 0:
+                        print('[%d/%d][%d/%d]\tLoss_main: %.4f\tLoss_adv: %.4f\tLoss(x): %.4f\tD(G(x)): %.4f / %.4f'
+                            % (epoch+1, num_epochs, i, len(self.painDataset_train),
+                                main_loss.item(), adv_loss.item(), mix_loss.item(), main_x, adv_x))
+
+                    # Save Losses for plotting later
+                    main_losses.append(main_loss.item())
+                    adv_losses.append(adv_loss.item())
+
+                    iters += 1
+                # Evaluation for this fold
+                correct, total = 0, 0
+                with torch.no_grad():
+
+                    # Iterate over the test data and generate predictions
+                    for i, data in enumerate(testloader, 0):
+
+                        # Get inputs
+                        data_sample = data['data_sample'].to(device)
+                        data_enc = self.enc(data_sample)
+                        subjects = data['subject'].long().to(device)
+                        classes = data['class'].long().to(device)
+
+                        # Generate outputs
+                        outputs_main = self.main_clf(data_enc)
+                        outputs_adv = self.adv_clf(data_enc)
+
+                        # Set total and correct
+                        _, predicted = torch.max(outputs_main.data, 1)
+                        total_main += classes.size(0)
+                        correct_main += (predicted == classes).sum().item()
+
+                        _, predicted = torch.max(outputs_adv.data, 1)
+                        total_adv += subjects.size(0)
+                        correct_adv += (predicted == subjects).sum().item()
+
+                    main_acc_epoch = 100.0 * (correct_main / total_main)
+                    main_accs.append(adv_acc_epoch)
+                    adv_acc_epoch = 100.0 * (correct_adv / total_adv)
+                    adv_accs.append(adv_acc_epoch)
+
+                main_accs.append(main_acc_epoch.float())
+                adv_accs.append(adv_acc_epoch.float())
+            
+            # Test the main classifier with the testing dataset
+            dataloader_test = DataLoader(self.painDataset_test, batch_size=batch_size, shuffle=True)
+            data_test = next(iter(dataloader_test))
+            X_test = self.enc(data_test['data_sample'])
+            y_test = data_test['class']
 
         # Predict the classes of the testing input dataset
         with torch.no_grad():
