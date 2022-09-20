@@ -126,7 +126,7 @@ class AdversarialModel:
             
             # Define data loaders for training and testing data in this fold
             trainloader = torch.utils.data.DataLoader(self.painDataset_pre, batch_size=10, sampler=train_subsampler)
-            testloader = torch.utils.data.DataLoader(self.painDataset_pre, batch_size=10, samsampler=test_subsampler)
+            testloader = torch.utils.data.DataLoader(self.painDataset_pre, batch_size=10, sampler=test_subsampler)
             for epoch in range(num_epochs):
                 # dataloader_pre = DataLoader(self.painDataset_pre, batch_size=batch_size, shuffle=True)
                 adv_acc = 0
@@ -190,7 +190,7 @@ class AdversarialModel:
                 # For each batch in the dataloader
                 # dataloader_train = DataLoader(self.painDataset_train, batch_size=batch_size, shuffle=True, num_workers=4)
                 main_acc, adv_acc = 0, 0
-                
+
                 for i, data in enumerate(trainloader, 0):
                     
                     ################
