@@ -125,8 +125,8 @@ class AdversarialModel:
             test_subsampler = torch.utils.data.SubsetRandomSampler(test_ids)
             
             # Define data loaders for training and testing data in this fold
-            trainloader = torch.utils.data.DataLoader(self.painDataset_pre, batch_size=10, sampler=train_subsampler)
-            testloader = torch.utils.data.DataLoader(self.painDataset_pre, batch_size=10, sampler=test_subsampler)
+            trainloader = torch.utils.data.DataLoader(self.painDataset_pre, batch_size=batch_size, sampler=train_subsampler)
+            testloader = torch.utils.data.DataLoader(self.painDataset_pre, batch_size=batch_size, sampler=test_subsampler)
             for epoch in range(num_epochs):
                 # dataloader_pre = DataLoader(self.painDataset_pre, batch_size=batch_size, shuffle=True)
                 adv_acc = 0

@@ -1,5 +1,9 @@
 # Load the libs
+<<<<<<< HEAD
 import framework_wandb as fw
+=======
+import framework_wandb as framework
+>>>>>>> 54513978279b4117dd0242c72791d0cc2a8d459c
 import numpy as np
 import wandb
 import sys
@@ -25,7 +29,11 @@ for fl in frame_label_s:
 class_labels_n = np.asarray(class_labels_n)
 
 data_frames_s = np.reshape(data_frames_s, newshape=(data_frames_s.shape[0], data_frames_s.shape[1], data_frames_s.shape[2], 1))
+<<<<<<< HEAD
 # run_name = sys.argv[1]
+=======
+run_name = sys.argv[1]
+>>>>>>> 54513978279b4117dd0242c72791d0cc2a8d459c
 
 
 # Create the object for training and testing the model
@@ -39,6 +47,7 @@ adv_accs = []
 cf_mats = []
 test_accs = []
 
+<<<<<<< HEAD
 sweep_config = {'method': 'bayes'} # Sweeping the hyperparameters
 metric = {'name': 'pred_acc', 'goal': 'maximize'}
 sweep_config['metric'] = metric
@@ -64,6 +73,38 @@ sweep_id = wandb.sweep(sweep_config, project="adversarial_model-OvsH_hyper_findi
 
 ad_model = fw.AdversarialModel(data_samples = data_frames_s, class_label=class_labels_n, subject_label=frame_subject_s, exclude_idx=sub_id)   
 wandb.agent(sweep_id, ad_model.train, count=64)
+=======
+
+for sub_id in range(36):
+    ad_model = framework.AdversarialModel(data_samples = data_frames_s, class_label=class_labels_n, subject_label=frame_subject_s, exclude_idx=sub_id, run_name=run_name)
+    sweep_config = {'method': 'random'} # Sweeping the hyperparameters
+    metric = {'name': 'pred_acc', 'goal': 'maximize'}
+    sweep_config['metric'] = metric
+    parameters_dict = {
+        'lam1': {
+            'values': [0.05, 0.5, 1.0]
+        },
+        'lam2': {
+            'values': [0.5, 0.6, 0.7, 0.8, 0.9]
+        },
+        'epochs':{
+            'values': [50, 100, 200]
+        },
+            'batch_size': {
+            # integers between 256 and 2048
+            # with evenly-distributed logarithms 
+            'distribution': 'q_log_uniform_values',
+            'q': 256,
+            'min': 256,
+            'max': 2048,
+        }
+    }
+
+    # Set the sweep agent
+    sweep_config['parameters'] = parameters_dict
+    sweep_id = wandb.sweep(sweep_config, project="adversarial_model-OvsH")
+    wandb.agent(sweep_id, ad_model.train, count=5)
+>>>>>>> 54513978279b4117dd0242c72791d0cc2a8d459c
 
 
 
