@@ -20,7 +20,7 @@ import random
 learning_rate = 1e-4 # Learning rate for optimizers
 beta1 = 0.5 # Beta1 heperparam for Adam optimizer
 k_fold = 10 # Number of folds in cross-validation
-ngpu = 4 # Number of GPUs
+ngpu = 1 # Number of GPUs
 device = torch.device("cuda:0" if (torch.cuda.is_available() and ngpu > 0) else "cpu")
 
 # The adversarial model's basic setting
@@ -65,7 +65,7 @@ class AdversarialModel:
          # Create global variables to balance the ratio of different conditions in each test
         test_class_id = []
         for class_id in range(class_count):
-            test_id_temp =  [i for i, e in enumerate(class_label[test_idx_0]) if e == class_id]
+            test_id_temp =  [i for i, e in enumerate(class_label[test_idx_0]) if e == class_unique[class_id]]
             test_class_id.append(test_id_temp)
         self.test_class_id = test_class_id
 
@@ -232,7 +232,7 @@ class AdversarialModel:
                 
             # Test the model with data from the testing set with random sampling
             # Load the data from the testing set
-            # AWARE: It is only for finding the hyperparameters, it will be risky in the actural property test!!!
+            ### IT IS ONLY FOR THE BINARY CLASSIFICATION INVOLVING CLASS 0
             for cl_idx in range(len(self.test_class_id)):
                 if cl_idx == 0:
                     test_final_test_id = random.sample(self.test_class_id[cl_idx], 200)
@@ -300,7 +300,7 @@ class AdversarialModel:
         X_test = self.enc(data_sample)
         y_test = data_test['class'].long().to(device)
 
-            # Predict the classes of the testing input dataset
+        # Predict the classes of the testing input dataset
         with torch.no_grad():
             self.main_clf.eval() # Set the main classifier in the evaluation mode
             output_test = self.main_clf(X_test)
