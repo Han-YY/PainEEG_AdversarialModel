@@ -24,3 +24,4 @@ __pycache__/trans_net.cpython-38.pyc
 *.pyc
 framework.py
 trans_net.py
+__pycache__/framework.cpython-38.pyc
