@@ -232,6 +232,7 @@ class AdversarialModel:
                 
             # Test the model with data from the testing set with random sampling
             # Load the data from the testing set
+            # AWARE: It is only for finding the hyperparameters, it will be risky in the actural property test!!!
             for cl_idx in range(len(self.test_class_id)):
                 if cl_idx == 0:
                     test_final_test_id = random.sample(self.test_class_id[cl_idx], 200)
@@ -291,23 +292,23 @@ class AdversarialModel:
                 log_dict = {"main_acc_epoch": main_acc_epoch,
                 "adv_acc_epoch": adv_acc_epoch}
             
-            # Post test after the whole training in each fold
-            # Use the temporary small testing set to test current performance
-            postloader = torch.utils.data.DataLoader(self.painDataset_post, batch_size=batch_size, shuffle=True)
-            data_test = next(iter(postloader))
-            data_sample = data_test['data_sample'].to(device)
-            X_test = self.enc(data_sample)
-            y_test = data_test['class'].long().to(device)
+        # Post test after the whole training
+        # Use the temporary small testing set to test current performance
+        postloader = torch.utils.data.DataLoader(self.painDataset_post, batch_size=batch_size, shuffle=True)
+        data_test = next(iter(postloader))
+        data_sample = data_test['data_sample'].to(device)
+        X_test = self.enc(data_sample)
+        y_test = data_test['class'].long().to(device)
 
             # Predict the classes of the testing input dataset
-            with torch.no_grad():
-                self.main_clf.eval() # Set the main classifier in the evaluation mode
-                output_test = self.main_clf(X_test)
-                preds = torch.argmax(output_test, 1).to(device)
-                accuracy = Accuracy().to(device)
-                pred_acc = accuracy(preds, y_test)
-                # cf_matrix = wandb.plot.confusion_matrix(probs=None, y_true=y_test.cpu(), preds=preds.cpu())
-                log_dict = {"post_pred_acc": pred_acc}
-                wandb.log(log_dict)
+        with torch.no_grad():
+            self.main_clf.eval() # Set the main classifier in the evaluation mode
+            output_test = self.main_clf(X_test)
+            preds = torch.argmax(output_test, 1).to(device)
+            accuracy = Accuracy().to(device)
+            pred_acc = accuracy(preds, y_test)
+            # cf_matrix = wandb.plot.confusion_matrix(probs=None, y_true=y_test.cpu(), preds=preds.cpu())
+            log_dict = {"post_pred_acc": pred_acc}
+            wandb.log(log_dict)
 
 
