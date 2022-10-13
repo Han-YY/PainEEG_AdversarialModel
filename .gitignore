@@ -24,3 +24,8 @@ __pycache__/trans_net.cpython-38.pyc
 *.pyc
 framework.py
 trans_net.py
+framework_backup.py
+framework_newPartPre.py
+geneModel_test.ipynb
+geneModel_test.ipynb
+geneModel_test.ipynb

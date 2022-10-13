@@ -22,7 +22,7 @@ nf = 100 # Size of z latent vector (size of adversary input)
 num_epochs = 200 # Number of training epochs
 lr = 0.0001 # Learning rate for Optimizers
 beta1 = 0.9 # Beta1 hyperparam for Adam optimizer
-k_fold = 10 # Number of folds in cross-validation
+k_fold = 5 # Number of folds in cross-validation
 ngpu = 0 # Number of GPUs (CHANGE IT WHEN RUNNING ON THE HPC)
 # Decide which device we want to run on
 device = torch.device("cuda:0" if (torch.cuda.is_available() and ngpu > 0) else "cpu")
@@ -119,6 +119,9 @@ class AdversarialModel:
 
         # Pre-train the adversary network to detect the features with high correlation to the individual differences
         for fold, (train_ids, test_ids) in enumerate(kfold.split(self.painDataset_pre)):
+            # Reset the weights of layers in the encoder and the adversary net
+            self.adv_clf.apply(trans_net.weights_init)
+            self.enc.apply(trans_net.weights_init)
             # Sample elements randomly from a given list of ids, no replacement.
             # Sample elements randomly from a given list of ids, no replacement.
             train_subsampler = torch.utils.data.SubsetRandomSampler(train_ids)
@@ -177,14 +180,18 @@ class AdversarialModel:
 
         # Trainiing the main classifier with 10-fold validation
         for fold, (train_ids, test_ids) in enumerate(kfold.split(self.painDataset_train)):
+            # Reset the weights of the networks
+            self.main_clf.apply(trans_net.weights_init)
+            self.adv_clf.apply(trans_net.weights_init)
+            self.enc.apply(trans_net.weights_init)
             # Sample elements randomly from a given list of ids, no replacement.
             # Sample elements randomly from a given list of ids, no replacement.
             train_subsampler = torch.utils.data.SubsetRandomSampler(train_ids)
             test_subsampler = torch.utils.data.SubsetRandomSampler(test_ids)
             
             # Define data loaders for training and testing data in this fold
-            trainloader = torch.utils.data.DataLoader(self.painDataset_train, batch_size=10, sampler=train_subsampler)
-            testloader = torch.utils.data.DataLoader(self.painDataset_train, batch_size=10, sampler=test_subsampler)
+            trainloader = torch.utils.data.DataLoader(self.painDataset_train, batch_size=512, sampler=train_subsampler)
+            testloader = torch.utils.data.DataLoader(self.painDataset_train, batch_size=512, sampler=test_subsampler)
             for epoch in range(num_epochs):
                 
                 # For each batch in the dataloader
@@ -250,7 +257,8 @@ class AdversarialModel:
 
                     iters += 1
                 # Evaluation for this fold
-                correct, total = 0, 0
+                correct_main, total_main = 0, 0
+                correct_adv, total_adv = 0, 0
                 with torch.no_grad():
 
                     # Iterate over the test data and generate predictions
@@ -282,6 +290,7 @@ class AdversarialModel:
 
                 main_accs.append(main_acc_epoch.float())
                 adv_accs.append(adv_acc_epoch.float())
+                print("Accuracy (main): " + main_acc_epoch.float() + " Accuracy (adv): " + adv_acc_epoch.float())
             
             # Test the main classifier with the testing dataset
             dataloader_test = DataLoader(self.painDataset_test, batch_size=batch_size, shuffle=True)
