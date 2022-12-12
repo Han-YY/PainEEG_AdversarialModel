@@ -72,6 +72,56 @@ class adv_clf(nn.Module):
 
         return x
 
+
+########################## GAN architecture #########################
+# The original codes were from https://pytorch.org/tutorials/beginner/dcgan_faces_tutorial.html
+nz = 100 # Input size of the latent vector
+ngf = 64 # Size of feature maps in generator
+nc = 1
+# Generator
+class gen(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.main = nn.Sequential(
+            # input is Z, going into a convolution
+            nn.ConvTranspose2d( nz, ngf * 8, 4, 1, 0, bias=False),
+            nn.BatchNorm2d(ngf * 8),
+            nn.ReLU(True),
+            # state size. (ngf*8) x 4 x 4
+            nn.ConvTranspose2d(ngf * 8, ngf * 4, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ngf * 4),
+            nn.ReLU(True),
+            # state size. (ngf*4) x 8 x 8
+            nn.ConvTranspose2d( ngf * 4, ngf * 2, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ngf * 2),
+            nn.ReLU(True),
+            # state size. (ngf*2) x 16 x 16
+            nn.ConvTranspose2d( ngf * 2, nc, 4, 2, 1, bias=False),
+            # state size. (ngf) x 32 x 32
+            nn.Tanh()
+        )
+
+    def forward(self, input):
+        return self.main(input)
+
+# Disciminator
+class dis_clf(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv1 = nn.Conv2d(1, 128, 7, padding=3, stride=1, bias=False)
+        self.relu = nn.LeakyReLU(0.2, inplace=True)
+        self.norm1 = nn.BatchNorm2d(128)
+        self.conv2 = nn.Conv2d(128, 64, 5, padding=2, stride=1, bias=False)
+        self.norm2 = nn.BatchNorm2d(64)
+        self.conv3 = nn.Conv2d(64, 32, 3, padding=1, stride=1, bias=False)
+        self.norm3 = nn.BatchNorm2d(32)
+        self.
+        self.softmax = nn.Softmax(dim=1)
+    
+
+    def forward(self, input):
+        return self.main(input)   
+
 # The class for building the dataset with both class labels and subject labels for tuning
 class PainDataset(Dataset):
     def __init__(self, data_samples, class_labels, subject_labels):
