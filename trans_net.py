@@ -115,7 +115,7 @@ class dis_clf(nn.Module):
         self.norm2 = nn.BatchNorm2d(64)
         self.conv3 = nn.Conv2d(64, 32, 3, padding=1, stride=1, bias=False)
         self.norm3 = nn.BatchNorm2d(32)
-        self.
+        
         self.softmax = nn.Softmax(dim=1)
     
 
