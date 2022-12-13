@@ -1,5 +1,9 @@
 # Load the libs
+<<<<<<< HEAD
+import framework_wandb as fw
+=======
 import framework_wandb as framework
+>>>>>>> 54513978279b4117dd0242c72791d0cc2a8d459c
 import numpy as np
 import wandb
 import sys
@@ -25,7 +29,11 @@ for fl in frame_label_s:
 class_labels_n = np.asarray(class_labels_n)
 
 data_frames_s = np.reshape(data_frames_s, newshape=(data_frames_s.shape[0], data_frames_s.shape[1], data_frames_s.shape[2], 1))
+<<<<<<< HEAD
+# run_name = sys.argv[1]
+=======
 run_name = sys.argv[1]
+>>>>>>> 54513978279b4117dd0242c72791d0cc2a8d459c
 
 
 # Create the object for training and testing the model
@@ -39,6 +47,33 @@ adv_accs = []
 cf_mats = []
 test_accs = []
 
+<<<<<<< HEAD
+sweep_config = {'method': 'bayes'} # Sweeping the hyperparameters
+metric = {'name': 'pred_acc', 'goal': 'maximize'}
+sweep_config['metric'] = metric
+parameters_dict = {
+    'lam1': {
+        'values': [0.01, 0.05, 0.075, 0.1, 0.5, 0.75, 1]
+    },
+    'lam2': {
+        'values': [0.05, 0.09, 0.1, 0.5, 0.9, 1]
+    },
+    'epochs':{
+        'values': [50, 100, 200]
+    },
+    'batch_size': {
+        'values': [256, 512, 1024, 2048]
+    }
+}
+
+# Set the sweep agent
+sweep_config['parameters'] = parameters_dict
+sub_id = int(sys.argv[1]) # The exluded participant's id in the encoded list
+sweep_id = wandb.sweep(sweep_config, project="adversarial_model-OvsH_hyper_finding_" + str(sub_id))
+
+ad_model = fw.AdversarialModel(data_samples = data_frames_s, class_label=class_labels_n, subject_label=frame_subject_s, exclude_idx=sub_id)   
+wandb.agent(sweep_id, ad_model.train, count=64)
+=======
 
 for sub_id in range(36):
     ad_model = framework.AdversarialModel(data_samples = data_frames_s, class_label=class_labels_n, subject_label=frame_subject_s, exclude_idx=sub_id, run_name=run_name)
@@ -69,6 +104,7 @@ for sub_id in range(36):
     sweep_config['parameters'] = parameters_dict
     sweep_id = wandb.sweep(sweep_config, project="adversarial_model-OvsH")
     wandb.agent(sweep_id, ad_model.train, count=5)
+>>>>>>> 54513978279b4117dd0242c72791d0cc2a8d459c
 
 
 

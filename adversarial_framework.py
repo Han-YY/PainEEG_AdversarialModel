@@ -3,10 +3,11 @@
 # Make all the steps into function, so that the pipeline can be built as blocks
 ## Import the packages
 import numpy as np
+import random
 import data_prep_func as prep
 import torch 
 import torch.nn as nn
-from torch.utils import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader
 import trans_net
 
 from torch.optim import Adam
@@ -15,7 +16,7 @@ from torch.optim import Adam
 ################################################################ Functions for training #################
 # Train a model (The main classifier or the adversary classifier)
 # label_target: 'class' or 'subject'
-def train(clf, train_set, label_target, epoch_num, batch_size, device, output_state=False):
+def train(clf, train_set, label_target, epoch_num, batch_size, device, ngpu, output_state=False):
     # Initilize the classifier
     enc = trans_net.encoder()
     enc.apply(trans_net.weights_init)
@@ -24,6 +25,10 @@ def train(clf, train_set, label_target, epoch_num, batch_size, device, output_st
     # Initialize the optimizers
     enc_opt = Adam(enc.parameters(), lr=1e-3, betas=(0.9, 0.99), eps=1e-8, weight_decay=0.01)
     main_opt = Adam(clf.parameters(), lr=1e-3, betas=(0.9, 0.99), eps=1e-8, weight_decay=0.01)    
+
+    if (device.type == 'cuda') and (ngpu > 1):
+        enc = nn.DataParallel(enc, list(range(ngpu))).cuda()
+        clf = nn.DataParallel(clf, list(range(ngpu))).cuda()
 
     criterion = nn.CrossEntropyLoss()
 
@@ -61,7 +66,7 @@ def train(clf, train_set, label_target, epoch_num, batch_size, device, output_st
     
 
 # Train the main and adversary models together
-def train_combined(train_set, epoch_num, batch_size, device, lam1, output_state=False):
+def train_combined(train_set, epoch_num, batch_size, device, ngpu, lam1, output_state=False):
     # Initilize the classifier
     enc = trans_net.encoder()
     main_clf = trans_net.main_clf()
@@ -75,6 +80,11 @@ def train_combined(train_set, epoch_num, batch_size, device, lam1, output_state=
     enc_opt = Adam(enc.parameters(), lr=1e-3, betas=(0.9, 0.99), eps=1e-8, weight_decay=0.01)
     main_opt = Adam(main_clf.parameters(), lr=1e-3, betas=(0.9, 0.99), eps=1e-8, weight_decay=0.01)    
     adv_opt = Adam(adv_clf.parameters(), lr=1e-3, betas=(0.9, 0.99), eps=1e-8, weight_decay=0.01)    
+
+    if (device.type == 'cuda') and (ngpu > 1):
+        enc = nn.DataParallel(enc, list(range(ngpu))).cuda()
+        main_clf = nn.DataParallel(main_clf, list(range(ngpu))).cuda()
+        adv_clf = nn.DataParallel(adv_clf, list(range(ngpu))).cuda()
 
     criterion = nn.CrossEntropyLoss()
 
@@ -113,14 +123,15 @@ def train_combined(train_set, epoch_num, batch_size, device, lam1, output_state=
             enc_opt.step()
 
     if output_state:
-        return main_clf, adv_clf, enc, losses
+        return enc, main_clf, adv_clf, losses
     else:
         return enc, main_clf, adv_clf
 
 
 ################################################################ Functions for testing #########################################################
 # Test the model with single samples
-def test_sample(enc, clf, test_set, label_target, device, val_state=False):
+# Test the model with single samples
+def test_sample(enc, clf, test_set, label_target, train_dict, device, val_state=False):
     # Basic properties for testing the set
     correct, total = 0, 0
     testloader = DataLoader(test_set, batch_size=test_set.__len__(), shuffle=False) # Load all the data together
@@ -130,18 +141,23 @@ def test_sample(enc, clf, test_set, label_target, device, val_state=False):
             data_sample = data['data_sample'].to(device)
             data_enc = enc(data_sample)
             label = data[label_target].to(device)
+
             output_label = clf(data_enc)
 
             # Evaluate the performance
             _, predicted_label = torch.max(output_label.data, 1)
+            predicted_label_conv = []
+            for p_label in predicted_label:
+                predicted_label_conv.append(train_dict[p_label.item()])
+
             total += label.size(0)
-            correct += (predicted_label == label).sum().item()
+            correct += len([i for i, e in enumerate(predicted_label_conv) if e == label[i]])
     accuracy = correct / total
 
     if val_state:
-        return predicted_label.item(), accuracy
+        return predicted_label_conv, accuracy
     else:
-        return predicted_label.item()
+        return predicted_label_conv
 
 
 # Test the model with accumulated evidence
@@ -161,7 +177,9 @@ def test_acc_evi(enc, clf, accu_len, test_set, label_target, device, val_state=F
     cont_idx = []
     for sub in subject_unique:
         for cla in class_unique:
-            idx_temp = [i for i, s in enumerate(label_subject) if s == sub] & [i for i, c in enumerate(label_class) if c == cla]
+            idx_temp_s = [i for i, s in enumerate(label_subject) if s == sub]
+            idx_temp_c = [i for i, c in enumerate(label_class) if c == cla]
+            idx_temp = [i for i in idx_temp_c if i in idx_temp_s]
             idx_discont = prep.ranges(idx_temp)
             for idx_slice in idx_discont:
                 cont_idx.append(list(range(idx_slice[0], idx_slice[1] + 1)))
@@ -174,17 +192,20 @@ def test_acc_evi(enc, clf, accu_len, test_set, label_target, device, val_state=F
     with torch.no_grad():
         for idx_case in cont_idx:
             data_sample_temp = data_sample[idx_case].to(device)
-            label = label_class[idx_case].to(device)
+            label = label[label_target][idx_case].to(device)
             data_enc = enc(data_sample_temp)
-            output_score = clf(data_enc).item()
+            output_score = np.array(clf(data_enc).tolist())
+
             for i in range(accu_len - 1, len(idx_case)):
+                
                 gold_label.append(label[i])
 
-                output_temp = np.array(output_score[i - accu_len, i])
-                output_temp_mean = np.mean(output_temp, axis=1)
+                output_temp = output_score[i - accu_len:i]
+                
+                output_temp_mean = np.mean(output_temp, axis=0) 
                 predict_mean.append(np.argmax(np.array(output_temp_mean)))
 
-                output_temp_argmax = np.argmax(output_temp, axis=0)
+                output_temp_argmax = np.argmax(output_temp, axis=1)
                 predict_vote.append(np.argmax(np.bincount(output_temp_argmax)))
     
     # Evaluate the metrics with the predictions according to mean scores or voting
@@ -207,21 +228,25 @@ def sub_exclude(data_samples, class_label, subject_label, exclude_idx):
     train_idx = [i for i, e in enumerate(subject_label) if e != subject_unique[exclude_idx]]
     test_idx = [i for i, e in enumerate(subject_label) if e == subject_unique[exclude_idx]]
 
+    train_dict = list(range(len(subject_unique)))
+    train_dict.remove(exclude_idx)
+
     painDataset_train = trans_net.PainDataset(data_samples[train_idx], class_label[train_idx], subject_label[train_idx])
     painDataset_test = trans_net.PainDataset(data_samples[test_idx], class_label[test_idx], subject_label[test_idx])   
 
-    return painDataset_train, painDataset_test
+    return painDataset_train, painDataset_test, train_dict
 
 
 # Combine the data from particular subjects
 def sub_combine(data_samples, class_label, subject_label, sub_idxs):
-    data_idx = [i for i, e in enumerate(subject_label) if e in sub_idxs]
+    subject_unique = np.unique(subject_label)
+    data_idx = [i for i, e in enumerate(subject_label) if e in subject_unique[sub_idxs]]
     return trans_net.PainDataset(data_samples[data_idx], class_label[data_idx], subject_label[data_idx])   
 
 # Split the training set into a training set and a validation set
 def train_test(data_samples, class_label, subject_label, ratio):
     data_idx = list(range(data_samples.shape[0]))
-    data_idx.shuffle()
+    random.shuffle(data_idx)
 
     train_idx = data_idx[0:int(ratio * len(data_idx))]
     test_idx = data_idx[int(ratio * len(data_idx)):]
@@ -230,5 +255,21 @@ def train_test(data_samples, class_label, subject_label, ratio):
     painDataset_test = trans_net.PainDataset(data_samples[test_idx], class_label[test_idx], subject_label[test_idx])   
 
     return painDataset_train, painDataset_test
+
+# Select the data from particular classes
+def select_data_class(data_samples, class_label, subject_label, target_classes):
+
+    data_idx = [i for i, e in enumerate(class_label) if e in target_classes]
+    return data_samples[data_idx], class_label[data_idx], subject_label[data_idx] # It was not ensembled into an object for the further processing (It is supposed to be called before creating the datasets)
+
+# Convert the class labels into 0 and 1 for binary clasification
+def bin_conv(class_label):
+    class_unique = np.unique(class_label)
+    class_bin_label = [0] * class_label.shape[0]
+
+    one_idx = [i for i, e in enumerate(class_label) if e == class_unique[1]]
+    for idx in one_idx:
+        class_bin_label[idx] = 1
+    return np.array(class_bin_label)
 
 

@@ -24,9 +24,13 @@ __pycache__/trans_net.cpython-38.pyc
 *.pyc
 framework.py
 trans_net.py
+<<<<<<< HEAD
 framework_backup.py
 framework_newPartPre.py
 geneModel_test.ipynb
 geneModel_test.ipynb
 geneModel_test.ipynb
 geneModel_test.ipynb
+=======
+__pycache__/framework.cpython-38.pyc
+>>>>>>> 7e037ddd482e6522c4c615bca5e011620acccae1
