@@ -187,35 +187,40 @@ def test_acc_evi(enc, clf, accu_len, test_set, label_target, device, val_state=F
     # Use accumulated evidence to test the model
     gold_label = []
     
+    predict_orig = []
     predict_mean = []
     predict_vote = []
     with torch.no_grad():
         for idx_case in cont_idx:
             data_sample_temp = data_sample[idx_case].to(device)
-            label = label[label_target][idx_case].to(device)
+            label = data[label_target][idx_case].to(device)
             data_enc = enc(data_sample_temp)
             output_score = np.array(clf(data_enc).tolist())
 
-            for i in range(accu_len - 1, len(idx_case)):
+            for i in range(accu_len, len(idx_case)):
                 
                 gold_label.append(label[i])
 
                 output_temp = output_score[i - accu_len:i]
                 
-                output_temp_mean = np.mean(output_temp, axis=0) 
+                
+                output_temp_mean = np.mean(output_temp, axis=0)           
                 predict_mean.append(np.argmax(np.array(output_temp_mean)))
 
                 output_temp_argmax = np.argmax(output_temp, axis=1)
                 predict_vote.append(np.argmax(np.bincount(output_temp_argmax)))
+
+                predict_orig.append(np.argmax(output_score[i]))
     
     # Evaluate the metrics with the predictions according to mean scores or voting
+    acc_orig = len([i for i in range(len(gold_label)) if predict_orig[i] == gold_label[i]]) / len(gold_label)
     acc_mean = len([i for i in range(len(gold_label)) if predict_mean[i] == gold_label[i]]) / len(gold_label)
     acc_vote = len([i for i in range(len(gold_label)) if predict_vote[i] == gold_label[i]]) / len(gold_label)
 
     predict_results = [gold_label, predict_mean, predict_vote]
 
     if val_state:
-        return acc_mean, acc_vote, predict_results
+        return acc_orig, acc_mean, acc_vote, predict_results
     else:
         return predict_results
 
@@ -242,6 +247,18 @@ def sub_combine(data_samples, class_label, subject_label, sub_idxs):
     subject_unique = np.unique(subject_label)
     data_idx = [i for i, e in enumerate(subject_label) if e in subject_unique[sub_idxs]]
     return trans_net.PainDataset(data_samples[data_idx], class_label[data_idx], subject_label[data_idx])   
+
+# When there are n participants to make a set, select 1/n data from each participant
+def sub_combine_fair(data_samples, class_label, subject_label, sub_idxs):
+    subject_unique = np.unique(subject_label)
+    data_idx  = []
+    n = len(sub_idxs)
+    for sub_idx in sub_idxs:
+        data_idx_temp = [i for i, e in enumerate(subject_label) if e == sub_idx]
+        # Randomly select 1/n of the data
+        random.shuffle(data_idx_temp)
+        data_idx = data_idx + data_idx[0:int((1 / n) * len(data_idx_temp))]
+    return trans_net.PainDataset(data_samples[data_idx], class_label[data_idx], subject_label[data_idx])  
 
 # Split the training set into a training set and a validation set
 def train_test(data_samples, class_label, subject_label, ratio):
@@ -271,5 +288,19 @@ def bin_conv(class_label):
     for idx in one_idx:
         class_bin_label[idx] = 1
     return np.array(class_bin_label)
+
+# Find the first n participants with the sum at least above 50%
+def find_common_thre(common_sub_list, threshold):
+    list_temp = sorted(common_sub_list, reverse=True) #A copy for sorting the list
+    print(list_temp)
+    sum_ratio = 0 # Sum of the common subjects' ratios
+    n_subject = []
+    k = 0
+    while sum_ratio < threshold:
+        sum_ratio += list_temp[k]
+        n_subject.append(common_sub_list.index(list_temp[k]))
+        k += 1
+    
+    return n_subject
 
 
